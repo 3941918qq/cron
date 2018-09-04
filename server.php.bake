@@ -1,0 +1,44 @@
+<?php
+require_once(__DIR__."/protocal.php");
+$serv = new swoole_server("0.0.0.0", 41234, SWOOLE_BASE, SWOOLE_SOCK_TCP);
+function get_redis()
+{
+	$redis = new Redis();
+	$redis->connect('127.0.0.1', 6379);
+	return $redis;
+}
+$redis = get_redis();
+$serv->set(array(
+    'worker_num' => 5,
+    'daemonize' => true,
+    'backlog' => 128,
+    'log_file' => '/data/logs/server.log',
+));
+
+$serv->set(array(
+    'open_length_check' => true,
+    'package_length_type' => 'n',
+    'package_length_offset' => 4,       
+    'package_body_offset' => 8,       
+));
+
+
+$serv->on('connect', function ($serv, $fd) use ($redis) {  
+	 $redis->set("monitor",1);
+   	 echo "Client: Connect.\n";
+});
+
+$serv->on('receive', function ($serv, $fd, $from_id, $data) {
+	 echo date("Y-m-d H:i:s")."/////////////".bin2hex($data)."\n";
+	 $result = string_handle( bin2hex( $data));
+	 $serv->send($fd,$result);
+});
+
+
+$serv->on('close', function ($serv, $fd) use ($redis) {
+	$redis->set("monitor",0);
+    	echo "Client: Close.\n";
+});
+
+//启动服务器
+$serv->start(); 
